@@ -1,0 +1,74 @@
+[project]
+name = "SiliconOCR"
+version = "0.1.0"
+description = "Modern OCR, Embeddings, and Translation Service optimized for Apple Silicon"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  # Core ML frameworks optimized for Apple Silicon
+  "torch>=2.5.0", # PyTorch with MPS (Metal Performance Shaders) support
+  "torchvision>=0.24.0",
+  # Embeddings - optimized for Mac
+  "sentence-transformers>=3.3.0", # For text embeddings
+  "transformers>=4.48.0", # HuggingFace transformers
+  "accelerate>=1.2.0", # For optimized model loading
+  "einops>=0.8.0", # Required by nomic-embed models
+  # OCR engines
+  "pytesseract>=0.3.13", # Tesseract OCR wrapper
+  "easyocr>=1.7.2", # Multi-language OCR with Apple Silicon support
+  # Translation
+  "sentencepiece>=0.2.1", # Tokenization for translation
+  # Hardware acceleration
+  "optimum>=1.23.0", # HuggingFace optimizations for Apple Silicon
+  # Image processing
+  "pillow>=12.1.0",
+  "opencv-python-headless>=4.11.0",
+  "pdf2image>=1.17.0",
+  # PDF processing
+  "pdfplumber>=0.11.9",
+  "pypdf>=6.5.0",
+  "pymupdf>=1.26.7", # Fast PDF rendering
+  # Utilities
+  "numpy>=2.3.0,<2.4.0", # Compatible with opencv-python-headless
+  "pydantic>=2.10.0",
+  "pydantic-settings>=2.6.0",
+  "loguru>=0.7.3", # Better logging
+  "httpx>=0.28.0", # Async HTTP client
+  "fastapi>=0.115.0", # For API service
+  "uvicorn[standard]>=0.40.0", # ASGI server
+  # HuggingFace
+  "huggingface-hub>=0.36.0", # Latest stable 0.x version
+  "langdetect>=1.0.9",
+  "sacremoses>=0.1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+  "pytest-cov>=6.0.0",
+  "ruff>=0.8.0",
+  "mypy>=1.13.0",
+  "types-Pillow",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
