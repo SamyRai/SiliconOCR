@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class DocumentType(str, Enum):
+class DocumentType(StrEnum):
     """Document type classification."""
 
     INVOICE = "invoice"
@@ -21,7 +21,7 @@ class DocumentType(str, Enum):
     OTHER = "other"
 
 
-class ProcessingStatus(str, Enum):
+class ProcessingStatus(StrEnum):
     """Document processing status."""
 
     PENDING = "pending"
