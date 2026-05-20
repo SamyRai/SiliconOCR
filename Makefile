@@ -1,7 +1,7 @@
 .PHONY: install dev test lint format check
 
 install:
-	uv sync
+	uv sync --all-extras
 
 dev:
 	uv run uvicorn src.api:app --reload
