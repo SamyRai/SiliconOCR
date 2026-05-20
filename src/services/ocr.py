@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import threading
 from pathlib import Path
+from typing import Any
 
 import torch
 from loguru import logger
@@ -12,23 +13,28 @@ from PIL import Image
 
 from ..config import get_settings
 
-# Optional dependencies
+# Optional dependencies (typed as Any to allow static checking when libs are missing)
+pytesseract: Any
+easyocr: Any
+DocumentFile: Any
+doctr_predictor: Any
+
 try:
     import pytesseract  # type: ignore
 except ImportError:
-    pytesseract = None  # type: ignore
+    pytesseract = None
 
 try:
     import easyocr  # type: ignore
 except ImportError:
-    easyocr = None  # type: ignore
+    easyocr = None
 
 try:
     from doctr.io import DocumentFile  # type: ignore
     from doctr.models import ocr_predictor as doctr_predictor  # type: ignore
 except ImportError:
-    DocumentFile = None  # type: ignore
-    doctr_predictor = None  # type: ignore
+    DocumentFile = None
+    doctr_predictor = None
 
 
 class OCRService:
@@ -42,12 +48,12 @@ class OCRService:
     Optimized for Mac with MPS support.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
         self._easyocr_lock = threading.Lock()
         self._doctr_lock = threading.Lock()
-        self._easyocr_reader: easyocr.Reader | None = None
-        self._doctr_model = None
+        self._easyocr_reader: Any | None = None
+        self._doctr_model: Any | None = None
         self._device = self._get_device()
 
         logger.info(f"OCRService initialized with device: {self._device}")
@@ -79,7 +85,7 @@ class OCRService:
 
         return img
 
-    def _get_easyocr_reader(self) -> easyocr.Reader:
+    def _get_easyocr_reader(self) -> Any:
         """Lazy load EasyOCR reader."""
         if self._easyocr_reader is not None:
             return self._easyocr_reader
@@ -106,7 +112,7 @@ class OCRService:
             logger.info(f"EasyOCR initialized (GPU: {use_gpu})")
             return reader
 
-    def _get_doctr_model(self):
+    def _get_doctr_model(self) -> Any:
         """Lazy load docTR model."""
         if self._doctr_model is not None:
             return self._doctr_model
@@ -157,7 +163,9 @@ class OCRService:
         # Run OCR thread-safely
         with self._easyocr_lock:
             results = reader.readtext(img_array, detail=0, paragraph=True)
-        return " ".join(results)
+
+        # Ensure we return a string list joined safely
+        return " ".join([str(r) for r in results])
 
     def ocr_doctr(self, image: Image.Image) -> str:
         """Run docTR on PIL image."""
@@ -173,13 +181,15 @@ class OCRService:
         with self._doctr_lock:
             result = model(doc)
 
-        # Extract text
-        words = []
-        for page in result.pages:
-            for block in page.blocks:
-                for line in block.lines:
-                    for word in line.words:
-                        words.append(word.value)
+        # Extract text in a defensive, typed way
+        words: list[str] = []
+        for page in getattr(result, "pages", []):
+            for block in getattr(page, "blocks", []):
+                for line in getattr(block, "lines", []):
+                    for word in getattr(line, "words", []):
+                        val = getattr(word, "value", None)
+                        if val is not None:
+                            words.append(str(val))
 
         return " ".join(words)
 

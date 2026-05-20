@@ -27,7 +27,7 @@ class EmbeddingService:
     - torch.compile for 2-3x speedup
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
         self._sbert_lock = threading.Lock()
         self._clip_lock = threading.Lock()

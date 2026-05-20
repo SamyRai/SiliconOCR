@@ -26,7 +26,7 @@ except ImportError:
 class PDFProcessor:
     """Process PDFs with multiple extraction strategies."""
 
-    def __init__(self, dpi: int = 200, max_pixels: int = 178956970):
+    def __init__(self, dpi: int = 200, max_pixels: int = 178956970) -> None:
         self.dpi = dpi
         self.max_pixels = max_pixels
 

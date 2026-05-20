@@ -26,13 +26,13 @@ class TranslationService:
     Optimized for Mac with MPS support.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
         self._nllb_lock = threading.Lock()
         self._marian_locks: dict[str, threading.Lock] = {}
-        self._nllb_model = None
-        self._nllb_tokenizer = None
-        self._marian_models: dict[str, tuple] = {}
+        self._nllb_model: AutoModelForSeq2SeqLM | None = None
+        self._nllb_tokenizer: AutoTokenizer | None = None
+        self._marian_models: dict[str, tuple[MarianMTModel, MarianTokenizer]] = {}
         self._device = self._get_device()
 
         logger.info(f"TranslationService initialized with device: {self._device}")
@@ -49,7 +49,7 @@ class TranslationService:
             logger.warning("MPS/CUDA not available, using CPU")
             return "cpu"
 
-    def _get_nllb_model(self) -> tuple:
+    def _get_nllb_model(self) -> tuple[AutoModelForSeq2SeqLM, AutoTokenizer]:
         """Lazy load NLLB model."""
         if self._nllb_model is not None and self._nllb_tokenizer is not None:
             return self._nllb_model, self._nllb_tokenizer
@@ -91,7 +91,9 @@ class TranslationService:
             self._nllb_tokenizer = tokenizer
             return model, tokenizer
 
-    def _get_marian_model(self, src_lang: str, tgt_lang: str) -> tuple:
+    def _get_marian_model(
+        self, src_lang: str, tgt_lang: str
+    ) -> tuple[MarianMTModel, MarianTokenizer]:
         """Lazy load MarianMT model for specific language pair."""
         pair_key = f"{src_lang}-{tgt_lang}"
 

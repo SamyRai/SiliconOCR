@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import pymupdf  # type: ignore
 from loguru import logger
 
 from .config import get_settings
@@ -19,7 +18,7 @@ from .services import EmbeddingService, OCRService, TranslationService
 class DocumentProcessor:
     """Process documents from inbox with OCR, embeddings, and classification."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
         self.ocr_service = OCRService()
         self.embedding_service = EmbeddingService()
@@ -76,37 +75,7 @@ class DocumentProcessor:
 
         return DocumentType.OTHER, 0.0
 
-    def _write_text_layer_to_pdf(self, pdf_path: Path, text_parts: list[str]):
-        """Add invisible text layer to PDF file.
-
-        Args:
-            pdf_path: Path to PDF file
-            text_parts: List of text strings, one per page
-        """
-        doc = pymupdf.open(pdf_path)
-
-        for page_num, text in enumerate(text_parts):
-            if page_num >= len(doc):
-                break
-
-            page = doc[page_num]
-            rect = page.rect
-
-            # Add invisible text layer
-            # Use a small font and make it transparent
-            page.insert_textbox(
-                rect,
-                text,
-                fontsize=1,
-                color=(0, 0, 0),
-                fill=(1, 1, 1),
-                overlay=False,
-                render_mode=3,  # Invisible text
-            )
-
-        # Save back to original file
-        doc.save(pdf_path, incremental=True, encryption=pymupdf.PDF_ENCRYPT_KEEP)
-        doc.close()
+    # PDF text-layer writing moved to PDFProcessor (see src/pdf_utils.py)
 
     def process_pdf(
         self,
@@ -279,7 +248,7 @@ class DocumentProcessor:
 
         return results
 
-    def save_result(self, doc: ProcessedDocument):
+    def save_result(self, doc: ProcessedDocument) -> None:
         """Save individual document result to JSON."""
         output_file = self.output_dir / f"{doc.filename}.json"
 
@@ -288,7 +257,7 @@ class DocumentProcessor:
 
         logger.debug(f"Saved result to {output_file}")
 
-    def save_summary(self, results: list[ProcessedDocument]):
+    def save_summary(self, results: list[ProcessedDocument]) -> None:
         """Save processing summary."""
         summary_file = self.output_dir / "processing_summary.json"
 

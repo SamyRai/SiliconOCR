@@ -71,7 +71,7 @@ async def process_document(
         content = await file.read()
         buffer.write(content)
 
-    def process_task(file_path: Path):
+    def process_task(file_path: Path) -> None:
         try:
             processor.process_pdf(
                 file_path,
