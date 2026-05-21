@@ -29,7 +29,7 @@ dependencies = [
   "pypdf>=6.5.0",
   "pymupdf>=1.26.7", # Fast PDF rendering
   # Utilities
-  "numpy>=2.3.0,<2.4.0", # Compatible with opencv-python-headless
+  "numpy>=2.3.0,<2.5.0", # Compatible with opencv-python-headless
   "pydantic>=2.10.0",
   "pydantic-settings>=2.6.0",
   "loguru>=0.7.3", # Better logging
