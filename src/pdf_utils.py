@@ -65,8 +65,8 @@ class PDFProcessor:
             try:
                 doc = pymupdf.open(pdf_path)
                 text_parts = []
-                for page in doc:
-                    text_parts.append(page.get_text())
+                for page_index in range(len(doc)):
+                    text_parts.append(doc.load_page(page_index).get_text())
                 doc.close()
                 text = "\n\n".join(text_parts)
                 if text.strip():

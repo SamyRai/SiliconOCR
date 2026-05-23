@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from contextlib import suppress
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -77,13 +78,16 @@ class EmbeddingService:
             # Apply torch.compile for speedup (PyTorch 2.0+)
             if self.settings.enable_torch_compile and hasattr(torch, "compile"):
                 try:
-                    model = torch.compile(model, mode="reduce-overhead")  # type: ignore
+                    model = cast(
+                        SentenceTransformer,
+                        torch.compile(model, mode="reduce-overhead"),
+                    )
                     logger.info("Text embedding model compiled with torch.compile")
                 except Exception as e:
                     logger.debug(f"torch.compile failed: {e}")
 
             self._sbert_model = model
-            return model
+            return cast(SentenceTransformer, model)
 
     def _get_clip_model(self) -> tuple[CLIPModel, CLIPProcessor]:
         """Lazy load CLIP model."""
@@ -95,16 +99,19 @@ class EmbeddingService:
                 return self._clip_model, self._clip_processor
 
             logger.info(f"Loading CLIP model: {self.settings.multimodal_model}")
-            model = CLIPModel.from_pretrained(self.settings.multimodal_model)
-            processor = CLIPProcessor.from_pretrained(self.settings.multimodal_model)
+            model = cast(CLIPModel, CLIPModel.from_pretrained(self.settings.multimodal_model))
+            processor = cast(
+                CLIPProcessor,
+                CLIPProcessor.from_pretrained(self.settings.multimodal_model),
+            )
 
             if self._device != "cpu":
-                model = model.to(self._device)
+                model = cast(CLIPModel, cast(Any, model).to(self._device))
 
                 # Apply torch.compile
                 if self.settings.enable_torch_compile and hasattr(torch, "compile"):
                     try:
-                        model = torch.compile(model, mode="reduce-overhead")
+                        model = cast(CLIPModel, torch.compile(model, mode="reduce-overhead"))
                         logger.info("CLIP model compiled with torch.compile")
                     except Exception as e:
                         logger.debug(f"torch.compile for CLIP failed: {e}")
@@ -176,10 +183,10 @@ class EmbeddingService:
         if hasattr(embeddings, "cpu"):
             embeddings = embeddings.cpu()
         if hasattr(embeddings, "numpy"):
-            arr = embeddings.numpy()
+            arr = cast(Any, embeddings).numpy()
             with suppress(Exception):
                 arr = arr.astype("float32")
-            return arr.tolist()  # type: ignore
+            return cast(list[list[float]], arr.tolist())
 
         return [[float(x) for x in row] for row in embeddings]
 
