@@ -7,11 +7,11 @@ dev:
 	uv run uvicorn src.api:app --reload
 
 test:
-	uv run pytest
+	uv run python -m pytest
 
 lint:
 	uv run ruff check .
-	uv run mypy src
+	uv run python -m mypy src
 
 format:
 	uv run ruff check --fix .

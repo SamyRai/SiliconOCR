@@ -137,8 +137,11 @@ class DocumentProcessor:
 
                 # Write text layer back to PDF if requested
                 if write_text_layer:
-                    self._write_text_layer_to_pdf(pdf_path, text_parts)
-                    logger.info(f"✍️  Written text layer to {pdf_path.name}")
+                    logger.warning(
+                        "write_text_layer requested for {} but PDF text-layer writing "
+                        "is not implemented yet; skipping",
+                        pdf_path.name,
+                    )
             else:
                 logger.warning(f"No text extracted and OCR disabled for {pdf_path.name}")
 
