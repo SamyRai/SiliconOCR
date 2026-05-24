@@ -8,34 +8,10 @@ from pathlib import Path
 from langdetect import DetectorFactory, detect
 
 from src.services.translation import TranslationService
+from src.translation_utils import translate_german_text_to_english
 
 # Make language detection deterministic
 DetectorFactory.seed = 0
-
-
-def chunk_text(text, max_chars=1500):
-    """Split text into chunks, trying to break at sentence boundaries."""
-    if len(text) <= max_chars:
-        return [text]
-
-    chunks = []
-    current_chunk = ""
-
-    # Split by sentences (simple approach)
-    sentences = text.replace(". ", ".|").replace("! ", "!|").replace("? ", "?|").split("|")
-
-    for sentence in sentences:
-        if len(current_chunk) + len(sentence) <= max_chars:
-            current_chunk += sentence
-        else:
-            if current_chunk:
-                chunks.append(current_chunk)
-            current_chunk = sentence
-
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    return chunks
 
 
 def main():
@@ -85,17 +61,17 @@ def main():
             if detected_lang == "de":
                 print(f"🇩🇪→🇬🇧 {json_file.name}", end="")
 
-                # Chunk long texts
-                chunks = chunk_text(text)
-                if len(chunks) > 1:
-                    print(f" ({len(chunks)} chunks)", end="")
+                translation = translate_german_text_to_english(
+                    text,
+                    translation_service,
+                    max_chars=1500,
+                    strategy="sentence",
+                    joiner=" ",
+                )
+                if translation.chunk_count > 1:
+                    print(f" ({translation.chunk_count} chunks)", end="")
 
-                translations = []
-                for chunk in chunks:
-                    translation = translation_service.translate_german_to_english(chunk)
-                    translations.append(translation)
-
-                data["translation_en"] = " ".join(translations)
+                data["translation_en"] = translation.text
                 print(" ✓")
                 updated += 1
             elif detected_lang != "en":

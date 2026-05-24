@@ -8,6 +8,8 @@ from loguru import logger
 
 from src.config import get_settings
 from src.services import TranslationService
+from src.storage import ProcessedDocumentStore
+from src.translation_utils import translate_german_text_to_english
 
 
 def translate_document(doc_path: Path, translation_service: TranslationService) -> dict:
@@ -24,36 +26,15 @@ def translate_document(doc_path: Path, translation_service: TranslationService) 
 
     logger.info(f"Translating {filename} ({len(text)} chars)")
 
-    # Split into chunks if too long (MarianMT has token limits)
-    max_chunk = 4000  # Conservative limit
-    chunks = []
-    current_chunk = []
-    current_length = 0
-
-    for paragraph in text.split("\n\n"):
-        para_len = len(paragraph)
-        if current_length + para_len > max_chunk and current_chunk:
-            chunks.append("\n\n".join(current_chunk))
-            current_chunk = [paragraph]
-            current_length = para_len
-        else:
-            current_chunk.append(paragraph)
-            current_length += para_len
-
-    if current_chunk:
-        chunks.append("\n\n".join(current_chunk))
-
-    # Translate chunks
-    logger.debug(f"Translating {len(chunks)} chunks")
-    translated_chunks = translation_service.translate_german_to_english_batch(chunks)
-    translated_text = "\n\n".join(translated_chunks)
+    translation = translate_german_text_to_english(text, translation_service)
+    logger.debug(f"Translated {translation.chunk_count} chunks")
 
     # Update document
-    doc["translated_text"] = translated_text
+    doc["translated_text"] = translation.text
     doc["source_language"] = "de"
     doc["target_language"] = "en"
 
-    logger.info(f"✓ Translated {filename} ({len(translated_text)} chars)")
+    logger.info(f"✓ Translated {filename} ({len(translation.text)} chars)")
 
     return doc
 
@@ -110,8 +91,8 @@ def main():
     logger.info("=" * 70)
 
     # Find documents
-    json_files = sorted(input_dir.glob(args.pattern))
-    json_files = [f for f in json_files if f.name != "processing_summary.json"]
+    input_store = ProcessedDocumentStore(input_dir)
+    json_files = list(input_store.iter_document_files(args.pattern))
 
     if args.limit:
         json_files = json_files[: args.limit]

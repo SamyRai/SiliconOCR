@@ -3,18 +3,11 @@
 import json
 import sys
 
-import numpy as np
 from loguru import logger
 
 from src.config import get_settings
 from src.services import EmbeddingService
-
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity."""
-    a_np = np.array(a)
-    b_np = np.array(b)
-    return float(np.dot(a_np, b_np) / (np.linalg.norm(a_np) * np.linalg.norm(b_np)))
+from src.storage import ProcessedDocumentStore
 
 
 def search_by_text(query: str, top_k: int = 5):
@@ -22,9 +15,8 @@ def search_by_text(query: str, top_k: int = 5):
     logger.info(f"Searching for: {query}")
 
     # Load processed documents
-    output_dir = get_settings().cache_dir / "processed"
-    json_files = list(output_dir.glob("*.json"))
-    json_files = [f for f in json_files if f.name != "processing_summary.json"]
+    store = ProcessedDocumentStore(get_settings().cache_dir / "processed")
+    json_files = list(store.iter_document_files())
 
     logger.info(f"Found {len(json_files)} processed documents")
 
@@ -39,7 +31,7 @@ def search_by_text(query: str, top_k: int = 5):
             doc = json.load(f)
 
         if doc.get("text_embedding"):
-            similarity = cosine_similarity(query_embedding, doc["text_embedding"])
+            similarity = embedding_service.similarity(query_embedding, doc["text_embedding"])
             results.append((similarity, doc))
 
     # Sort by similarity
@@ -64,9 +56,8 @@ def search_by_keyword(keyword: str, case_sensitive: bool = False):
     """Search documents by keyword."""
     logger.info(f"Searching for keyword: {keyword}")
 
-    output_dir = get_settings().cache_dir / "processed"
-    json_files = list(output_dir.glob("*.json"))
-    json_files = [f for f in json_files if f.name != "processing_summary.json"]
+    store = ProcessedDocumentStore(get_settings().cache_dir / "processed")
+    json_files = list(store.iter_document_files())
 
     results = []
     for json_file in json_files:

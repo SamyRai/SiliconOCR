@@ -1,102 +1,54 @@
-"""Document processor for inbox files."""
+"""Document processing orchestration."""
 
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
-from typing import Any
 
 from loguru import logger
 
-from .config import get_settings
-from .models import DocumentType, ProcessedDocument, ProcessingStatus
+from .classification import DocumentClassifier
+from .config import Settings, get_settings
+from .models import ProcessedDocument, ProcessingOptions, ProcessingStatus
 from .pdf_utils import PDFProcessor
 from .services import EmbeddingService, OCRService, TranslationService
+from .storage import ProcessedDocumentStore
 
 
 class DocumentProcessor:
-    """Process documents from inbox with OCR, embeddings, and classification."""
+    """Coordinate PDF extraction, OCR, embeddings, translation, and classification."""
 
-    def __init__(self) -> None:
-        self.settings = get_settings()
-        self.ocr_service = OCRService()
-        self.embedding_service = EmbeddingService()
-        self.translation_service = TranslationService()
-        self.pdf_processor = PDFProcessor(
+    def __init__(
+        self,
+        *,
+        settings: Settings | None = None,
+        pdf_processor: PDFProcessor | None = None,
+        ocr_service: OCRService | None = None,
+        embedding_service: EmbeddingService | None = None,
+        translation_service: TranslationService | None = None,
+        classifier: DocumentClassifier | None = None,
+        store: ProcessedDocumentStore | None = None,
+    ) -> None:
+        self.settings = settings or get_settings()
+        self.pdf_processor = pdf_processor or PDFProcessor(
             dpi=self.settings.pdf_dpi,
             max_pixels=self.settings.max_image_pixels,
         )
-
-        # Output directories
-        self.output_dir = self.settings.cache_dir / "processed"
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def classify_document(self, filename: str, text: str) -> tuple[DocumentType, float]:
-        """Simple rule-based classification.
-
-        Can be enhanced with ML classification later.
-        """
-        filename_lower = filename.lower()
-        text_lower = text.lower()
-
-        # Keywords for classification
-        keywords = {
-            DocumentType.INVOICE: ["invoice", "rechnung", "faktura", "payment"],
-            DocumentType.UTILITIES: [
-                "utilities",
-                "nebenkosten",
-                "betriebskosten",
-                "heating",
-            ],
-            DocumentType.PAYMENT_REMINDER: ["mahnung", "reminder", "payment reminder"],
-            DocumentType.CONTRACT: ["vertrag", "contract", "vereinbarung"],
-            DocumentType.FORM: ["formular", "form", "antrag", "application"],
-            DocumentType.LETTER: ["brief", "letter", "mitteilung"],
-        }
-
-        scores = {}
-        for doc_type, terms in keywords.items():
-            score = 0.0
-            for term in terms:
-                if term in filename_lower:
-                    score += 2.0  # Filename match is stronger
-                if term in text_lower:
-                    score += 1.0
-            scores[doc_type] = score
-
-        # Get best match
-        if scores:
-            best_type = max(scores, key=lambda k: scores[k])
-            max_score = scores[best_type]
-            if max_score > 0:
-                confidence = min(1.0, max_score / 5.0)  # Normalize
-                return best_type, confidence
-
-        return DocumentType.OTHER, 0.0
-
-    # PDF text-layer writing moved to PDFProcessor (see src/pdf_utils.py)
+        self.ocr_service = ocr_service or OCRService()
+        self.embedding_service = embedding_service or EmbeddingService()
+        self.translation_service = translation_service or TranslationService()
+        self.classifier = classifier or DocumentClassifier()
+        self.store = store or ProcessedDocumentStore(self.settings.cache_dir / "processed")
 
     def process_pdf(
         self,
         pdf_path: Path,
-        enable_ocr: bool = True,
-        enable_embeddings: bool = True,
-        enable_classification: bool = False,
-        write_text_layer: bool = False,
-        enable_translation: bool = False,
-        target_language: str = "en",
+        options: ProcessingOptions | None = None,
     ) -> ProcessedDocument:
-        """Process a single PDF file.
-
-        Steps:
-        1. Try native text extraction
-        2. Fall back to OCR if needed (if enable_ocr)
-        3. Generate embeddings (if enable_embeddings)
-        4. Classify document (if enable_classification)
-        5. Write text layer to PDF (if write_text_layer and OCR was used)
-        """
+        """Process a single PDF file."""
+        options = options or ProcessingOptions()
         start_time = time.time()
+        pdf_path = Path(pdf_path)
 
         doc = ProcessedDocument(
             filename=pdf_path.name,
@@ -106,77 +58,21 @@ class DocumentProcessor:
         )
 
         try:
-            # Count pages
             page_count = self.pdf_processor.count_pages(pdf_path)
             doc.page_count = page_count
             logger.info(f"Processing {pdf_path.name} ({page_count} pages)")
 
-            # Try native extraction first
-            text, success = self.pdf_processor.extract_text_native(pdf_path)
-
-            if success and text.strip():
-                doc.text = text
-                doc.extracted_via_ocr = False
-                doc.ocr_engine = "native"
-                logger.debug(f"Native extraction successful: {len(text)} chars")
-            elif enable_ocr:
-                # Fall back to OCR
-                logger.info(f"Native extraction failed, using OCR for {pdf_path.name}")
-                images = self.pdf_processor.convert_to_images(pdf_path)
-
-                text_parts = []
-                for i, image in enumerate(images):
-                    logger.debug(f"OCR page {i + 1}/{len(images)}")
-                    page_text = self.ocr_service.ocr_image_from_pil(image)
-                    text_parts.append(page_text)
-
-                doc.text = "\n\n".join(text_parts)
-                doc.extracted_via_ocr = True
-                doc.ocr_engine = self.settings.ocr_engine
-                logger.debug(f"OCR extraction successful: {len(doc.text)} chars")
-
-                # Write text layer back to PDF if requested
-                if write_text_layer:
-                    self._write_text_layer_to_pdf(pdf_path, text_parts)
-                    logger.info(f"✍️  Written text layer to {pdf_path.name}")
-            else:
-                logger.warning(f"No text extracted and OCR disabled for {pdf_path.name}")
-
-            # Generate embeddings
-            if enable_embeddings and doc.text.strip():
-                logger.debug("Generating embeddings...")
-                embedding = self.embedding_service.embed_text(doc.text[:5000])  # Limit
-                doc.text_embedding = embedding
-                doc.embedding_model = self.settings.text_embedding_model
-
-            # Translate document
-            if enable_translation and doc.text.strip():
-                logger.debug(f"Translating text to {target_language}...")
-                try:
-                    # Using Marian for de->en as default, but can be configured
-                    # We limit text to 5000 characters to prevent huge processing time
-                    translated_text = self.translation_service.translate(
-                        doc.text[:5000], src_lang="de", tgt_lang=target_language, use_marian=True
-                    )
-                    doc.translated_text = translated_text
-                    doc.target_language = target_language
-                    doc.source_language = "de"
-                except Exception as e:
-                    logger.warning(f"Translation failed: {e}")
-
-            # Classify document
-            if enable_classification:
-                doc_type, confidence = self.classify_document(pdf_path.name, doc.text)
-                doc.document_type = doc_type
-                doc.confidence = confidence
+            self._extract_text(pdf_path, doc, options)
+            self._embed_text(doc, options)
+            self._translate_text(doc, options)
+            self._classify_document(doc, options)
 
             doc.status = ProcessingStatus.COMPLETED
             processing_time = time.time() - start_time
             doc.metadata["processing_time_seconds"] = round(processing_time, 2)
 
-            # Log message
             log_msg = f"✓ Processed {pdf_path.name} in {processing_time:.2f}s "
-            if enable_classification:
+            if options.enable_classification:
                 log_msg += f"(type: {doc.document_type}, {len(doc.text)} chars)"
             else:
                 log_msg += f"({len(doc.text)} chars)"
@@ -192,36 +88,19 @@ class DocumentProcessor:
     def process_inbox(
         self,
         inbox_dir: Path,
-        file_pattern: str = "*.pdf",
+        pattern: str = "*.pdf",
         limit: int | None = None,
-        enable_ocr: bool = True,
-        enable_embeddings: bool = True,
-        enable_classification: bool = False,
-        write_text_layer: bool = False,
-        enable_translation: bool = False,
-        target_language: str = "en",
+        options: ProcessingOptions | None = None,
     ) -> list[ProcessedDocument]:
-        """Process all files in inbox directory.
-
-        Args:
-            inbox_dir: Path to inbox directory
-            file_pattern: File pattern to match (e.g., "*.pdf")
-            limit: Maximum number of files to process
-            enable_ocr: Whether to perform OCR on documents without text
-            enable_embeddings: Whether to generate text embeddings
-            enable_classification: Whether to classify documents
-            write_text_layer: Whether to write OCR text back to PDF files
-
-        Returns:
-            List of processed documents
-        """
+        """Process all matching PDFs in an inbox directory."""
         inbox_dir = Path(inbox_dir)
+        options = options or ProcessingOptions()
 
         if not inbox_dir.exists():
             logger.error(f"Inbox directory not found: {inbox_dir}")
             return []
 
-        files = sorted(inbox_dir.glob(file_pattern))
+        files = sorted(inbox_dir.glob(pattern))
         if limit:
             files = files[:limit]
 
@@ -229,56 +108,78 @@ class DocumentProcessor:
 
         results = []
         for pdf_path in files:
-            doc = self.process_pdf(
-                pdf_path,
-                enable_ocr=enable_ocr,
-                enable_embeddings=enable_embeddings,
-                enable_classification=enable_classification,
-                write_text_layer=write_text_layer,
-                enable_translation=enable_translation,
-                target_language=target_language,
-            )
+            doc = self.process_pdf(pdf_path, options=options)
             results.append(doc)
+            self.store.save_document(doc)
 
-            # Save individual result
-            self.save_result(doc)
-
-        # Save summary
-        self.save_summary(results)
-
+        self.store.save_summary(results)
         return results
 
-    def save_result(self, doc: ProcessedDocument) -> None:
-        """Save individual document result to JSON."""
-        output_file = self.output_dir / f"{doc.filename}.json"
+    def _extract_text(
+        self,
+        pdf_path: Path,
+        doc: ProcessedDocument,
+        options: ProcessingOptions,
+    ) -> None:
+        text, success = self.pdf_processor.extract_text_native(pdf_path)
 
-        with open(output_file, "w") as f:
-            json.dump(doc.model_dump(), f, indent=2, default=str)
+        if success and text.strip():
+            doc.text = text
+            doc.extracted_via_ocr = False
+            doc.ocr_engine = "native"
+            logger.debug(f"Native extraction successful: {len(text)} chars")
+            return
 
-        logger.debug(f"Saved result to {output_file}")
+        if not options.enable_ocr:
+            logger.warning(f"No text extracted and OCR disabled for {pdf_path.name}")
+            return
 
-    def save_summary(self, results: list[ProcessedDocument]) -> None:
-        """Save processing summary."""
-        summary_file = self.output_dir / "processing_summary.json"
+        logger.info(f"Native extraction failed, using OCR for {pdf_path.name}")
+        images = self.pdf_processor.convert_to_images(pdf_path)
 
-        summary: dict[str, Any] = {
-            "total_processed": len(results),
-            "successful": sum(1 for d in results if d.status == ProcessingStatus.COMPLETED),
-            "failed": sum(1 for d in results if d.status == ProcessingStatus.FAILED),
-            "document_types": {},
-            "total_pages": sum(d.page_count for d in results),
-            "total_characters": sum(len(d.text) for d in results),
-        }
+        page_texts = []
+        for i, image in enumerate(images):
+            logger.debug(f"OCR page {i + 1}/{len(images)}")
+            page_texts.append(self.ocr_service.ocr_image_from_pil(image))
 
-        # Count document types
-        for doc in results:
-            doc_type = doc.document_type
-            if doc_type not in summary["document_types"]:
-                summary["document_types"][doc_type] = 0
-            summary["document_types"][doc_type] += 1
+        doc.text = "\n\n".join(page_texts)
+        doc.extracted_via_ocr = True
+        doc.ocr_engine = self.settings.ocr_engine
+        logger.debug(f"OCR extraction successful: {len(doc.text)} chars")
 
-        with open(summary_file, "w") as f:
-            json.dump(summary, f, indent=2)
+        if options.write_text_layer:
+            self.pdf_processor.write_text_layer(pdf_path, page_texts)
+            logger.info(f"✓ Written text layer to {pdf_path.name}")
 
-        logger.info(f"✓ Saved summary to {summary_file}")
-        logger.info(f"Summary: {summary['successful']}/{summary['total_processed']} successful")
+    def _embed_text(self, doc: ProcessedDocument, options: ProcessingOptions) -> None:
+        if not options.enable_embeddings or not doc.text.strip():
+            return
+
+        logger.debug("Generating embeddings...")
+        doc.text_embedding = self.embedding_service.embed_text(doc.text[:5000])
+        doc.embedding_model = self.settings.text_embedding_model
+
+    def _translate_text(self, doc: ProcessedDocument, options: ProcessingOptions) -> None:
+        if not options.enable_translation or not doc.text.strip():
+            return
+
+        logger.debug(f"Translating text to {options.target_language}...")
+        try:
+            doc.translated_text = self.translation_service.translate(
+                doc.text[:5000],
+                src_lang="de",
+                tgt_lang=options.target_language,
+                use_marian=True,
+            )
+            doc.target_language = options.target_language
+            doc.source_language = "de"
+        except Exception as e:
+            logger.warning(f"Translation failed: {e}")
+
+    def _classify_document(self, doc: ProcessedDocument, options: ProcessingOptions) -> None:
+        if not options.enable_classification:
+            return
+
+        result = self.classifier.classify(doc.filename, doc.text)
+        doc.document_type = result.document_type
+        doc.confidence = result.confidence

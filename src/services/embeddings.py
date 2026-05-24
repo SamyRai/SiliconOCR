@@ -13,6 +13,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import CLIPModel, CLIPProcessor
 
 from ..config import get_settings
+from .device import resolve_torch_device
 
 
 class EmbeddingService:
@@ -40,15 +41,7 @@ class EmbeddingService:
 
     def _get_device(self) -> str:
         """Determine best device for Mac."""
-        settings = self.settings
-
-        if settings.device == "mps" and torch.backends.mps.is_available():
-            return "mps"
-        elif settings.device == "cuda" and torch.cuda.is_available():
-            return "cuda"
-        else:
-            logger.warning("MPS/CUDA not available, using CPU")
-            return "cpu"
+        return resolve_torch_device(self.settings)
 
     def _get_sbert_model(self) -> SentenceTransformer:
         """Lazy load SentenceTransformer model."""

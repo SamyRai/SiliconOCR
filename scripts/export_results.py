@@ -8,13 +8,13 @@ from pathlib import Path
 from loguru import logger
 
 from src.config import get_settings
+from src.storage import ProcessedDocumentStore
 
 
 def export_to_csv(output_file: Path):
     """Export processed documents to CSV."""
-    output_dir = get_settings().cache_dir / "processed"
-    json_files = list(output_dir.glob("*.json"))
-    json_files = [f for f in json_files if f.name != "processing_summary.json"]
+    store = ProcessedDocumentStore(get_settings().cache_dir / "processed")
+    json_files = list(store.iter_document_files())
 
     logger.info(f"Exporting {len(json_files)} documents to CSV")
 
@@ -63,9 +63,8 @@ def export_to_csv(output_file: Path):
 
 def export_full_text(output_file: Path):
     """Export all text to single text file."""
-    output_dir = get_settings().cache_dir / "processed"
-    json_files = list(output_dir.glob("*.json"))
-    json_files = [f for f in json_files if f.name != "processing_summary.json"]
+    store = ProcessedDocumentStore(get_settings().cache_dir / "processed")
+    json_files = list(store.iter_document_files())
 
     logger.info(f"Exporting text from {len(json_files)} documents")
 

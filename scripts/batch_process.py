@@ -7,6 +7,7 @@ from pathlib import Path
 from loguru import logger
 
 from src.config import get_settings
+from src.models import ProcessingOptions
 from src.processor import DocumentProcessor
 
 
@@ -40,6 +41,7 @@ def main():
 
     # Initialize processor
     processor = DocumentProcessor()
+    options = ProcessingOptions()
 
     # Get all PDFs
     pdf_files = sorted(inbox_path.glob("*.pdf"))
@@ -52,12 +54,12 @@ def main():
     results = []
     for i, pdf_path in enumerate(pdf_files, 1):
         logger.info(f"\n[{i}/{total_files}] Processing {pdf_path.name}")
-        doc = processor.process_pdf(pdf_path)
+        doc = processor.process_pdf(pdf_path, options=options)
         results.append(doc)
-        processor.save_result(doc)
+        processor.store.save_document(doc)
 
     # Save summary
-    processor.save_summary(results)
+    processor.store.save_summary(results)
 
     # Final summary
     elapsed = time.time() - start_time

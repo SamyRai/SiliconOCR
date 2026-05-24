@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from typing import Any, cast
 
 import torch
 from loguru import logger
@@ -14,6 +15,7 @@ from transformers import (
 )
 
 from ..config import get_settings
+from .device import resolve_torch_device
 
 
 class TranslationService:
@@ -30,8 +32,8 @@ class TranslationService:
         self.settings = get_settings()
         self._nllb_lock = threading.Lock()
         self._marian_locks: dict[str, threading.Lock] = {}
-        self._nllb_model: AutoModelForSeq2SeqLM | None = None
-        self._nllb_tokenizer: AutoTokenizer | None = None
+        self._nllb_model: Any | None = None
+        self._nllb_tokenizer: Any | None = None
         self._marian_models: dict[str, tuple[MarianMTModel, MarianTokenizer]] = {}
         self._device = self._get_device()
 
@@ -39,17 +41,9 @@ class TranslationService:
 
     def _get_device(self) -> str:
         """Determine best device for Mac."""
-        settings = self.settings
+        return resolve_torch_device(self.settings)
 
-        if settings.device == "mps" and torch.backends.mps.is_available():
-            return "mps"
-        elif settings.device == "cuda" and torch.cuda.is_available():
-            return "cuda"
-        else:
-            logger.warning("MPS/CUDA not available, using CPU")
-            return "cpu"
-
-    def _get_nllb_model(self) -> tuple[AutoModelForSeq2SeqLM, AutoTokenizer]:
+    def _get_nllb_model(self) -> tuple[Any, Any]:
         """Lazy load NLLB model."""
         if self._nllb_model is not None and self._nllb_tokenizer is not None:
             return self._nllb_model, self._nllb_tokenizer
@@ -210,7 +204,9 @@ class TranslationService:
         if use_marian:
             model, tokenizer = self._get_marian_model(src_lang, tgt_lang)
         else:
-            model, tokenizer = self._get_nllb_model()
+            nllb_model, nllb_tokenizer = self._get_nllb_model()
+            model = cast(Any, nllb_model)
+            tokenizer = cast(Any, nllb_tokenizer)
             tokenizer.src_lang = src_lang
 
         batch_size = self.settings.translation_batch_size

@@ -7,11 +7,11 @@ import threading
 from pathlib import Path
 from typing import Any
 
-import torch
 from loguru import logger
 from PIL import Image
 
 from ..config import get_settings
+from .device import resolve_torch_device
 
 # Optional dependencies (typed as Any to allow static checking when libs are missing)
 pytesseract: Any
@@ -60,15 +60,7 @@ class OCRService:
 
     def _get_device(self) -> str:
         """Determine best device for Mac."""
-        settings = self.settings
-
-        # EasyOCR uses string device names differently
-        if settings.device == "mps" and torch.backends.mps.is_available():
-            return "mps"
-        elif settings.device == "cuda" and torch.cuda.is_available():
-            return "cuda"
-        else:
-            return "cpu"
+        return resolve_torch_device(self.settings, warn_on_cpu=False)
 
     def _maybe_downscale(self, img: Image.Image) -> Image.Image:
         """Downscale large images to improve OCR speed."""

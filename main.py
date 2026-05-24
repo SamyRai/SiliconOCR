@@ -5,6 +5,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.models import ProcessingOptions
 from src.processor import DocumentProcessor
 
 
@@ -98,16 +99,19 @@ def main():
 
     # Initialize processor
     processor = DocumentProcessor()
-
-    # Process inbox
-    results = processor.process_inbox(
-        inbox_dir=args.inbox,
-        file_pattern=args.pattern,
-        limit=args.limit,
+    options = ProcessingOptions(
         enable_ocr=args.ocr,
         enable_embeddings=args.embed,
         enable_classification=args.classify,
         write_text_layer=args.write_text_layer,
+    )
+
+    # Process inbox
+    results = processor.process_inbox(
+        inbox_dir=args.inbox,
+        pattern=args.pattern,
+        limit=args.limit,
+        options=options,
     )
 
     # Summary
