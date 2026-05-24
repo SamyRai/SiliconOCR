@@ -15,6 +15,7 @@ from transformers import (
 )
 
 from ..config import get_settings
+from .device import resolve_torch_device
 
 
 class TranslationService:
@@ -40,15 +41,7 @@ class TranslationService:
 
     def _get_device(self) -> str:
         """Determine best device for Mac."""
-        settings = self.settings
-
-        if settings.device == "mps" and torch.backends.mps.is_available():
-            return "mps"
-        elif settings.device == "cuda" and torch.cuda.is_available():
-            return "cuda"
-        else:
-            logger.warning("MPS/CUDA not available, using CPU")
-            return "cpu"
+        return resolve_torch_device(self.settings)
 
     def _get_nllb_model(self) -> tuple[Any, Any]:
         """Lazy load NLLB model."""
@@ -61,19 +54,13 @@ class TranslationService:
 
             logger.info(f"Loading translation model: {self.settings.translation_model}")
 
-            tokenizer = cast(
-                Any,
-                AutoTokenizer.from_pretrained(
-                    self.settings.translation_model,
-                    cache_dir=str(self.settings.model_cache_dir),
-                ),
+            tokenizer = AutoTokenizer.from_pretrained(
+                self.settings.translation_model,
+                cache_dir=str(self.settings.model_cache_dir),
             )
-            model = cast(
-                Any,
-                AutoModelForSeq2SeqLM.from_pretrained(
-                    self.settings.translation_model,
-                    cache_dir=str(self.settings.model_cache_dir),
-                ),
+            model = AutoModelForSeq2SeqLM.from_pretrained(
+                self.settings.translation_model,
+                cache_dir=str(self.settings.model_cache_dir),
             )
 
             if self._device != "cpu":
@@ -89,7 +76,7 @@ class TranslationService:
                 # Apply torch.compile
                 if self.settings.enable_torch_compile and hasattr(torch, "compile"):
                     try:
-                        model = cast(Any, torch.compile(model, mode="reduce-overhead"))
+                        model = torch.compile(model, mode="reduce-overhead")
                         logger.info("Translation model compiled")
                     except Exception as e:
                         logger.debug(f"torch.compile failed: {e}")
@@ -221,7 +208,9 @@ class TranslationService:
         if use_marian:
             model, tokenizer = self._get_marian_model(src_lang, tgt_lang)
         else:
-            model, tokenizer = self._get_nllb_model()
+            nllb_model, nllb_tokenizer = self._get_nllb_model()
+            model = cast(Any, nllb_model)
+            tokenizer = cast(Any, nllb_tokenizer)
             tokenizer.src_lang = src_lang
 
         batch_size = self.settings.translation_batch_size

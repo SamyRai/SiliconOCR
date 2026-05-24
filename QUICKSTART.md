@@ -56,17 +56,17 @@ source .venv/bin/activate
 Process all PDFs in the inbox directory:
 
 ```bash
-# Process all documents
-python main.py
+# Process all documents with default OCR + embeddings
+uv run python main.py
 
 # Process with specific inbox path
-python main.py --inbox /path/to/inbox
+uv run python main.py --inbox /path/to/inbox
 
 # Limit number of files
-python main.py --limit 10
+uv run python main.py --limit 10
 
 # Verbose logging
-python main.py --verbose
+uv run python main.py --verbose
 ```
 
 ### Batch Processing
@@ -110,10 +110,14 @@ Processed documents are saved to `~/.cache/SiliconOCR/processed/`:
 - Text embeddings (1024-dimensional vectors)
 - Document classification
 
+The processing pipeline is configured through `ProcessingOptions` and coordinated by
+`DocumentProcessor`. Classification rules live in `DocumentClassifier`, and result JSON
+persistence lives in `ProcessedDocumentStore`.
+
 ## Models
 
 - **OCR**: EasyOCR (best Mac support), docTR, Tesseract
-- **Embeddings**: BGE-large-en-v1.5 (1024-dim)
+- **Embeddings**: nomic-embed-text-v2-moe
 - **Translation**: NLLB-200 (200+ languages)
 
 ## Performance

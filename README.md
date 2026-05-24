@@ -53,9 +53,13 @@ Use the `Makefile` for standard checks:
 
 ## Architecture
 
-- `api.py`: FastAPI routes and dependency injection.
-- `processor.py`: Orchestrator for extraction, embeddings, and translation routing.
-- `services/`: Singleton implementations with thread-locks for ML models (`ocr.py`, `embeddings.py`, `translation.py`).
+- `api.py`: FastAPI routes, dependency injection, and background task scheduling.
+- `processor.py`: Pipeline coordinator for PDF extraction, OCR fallback, embeddings, translation, and classification.
+- `models.py`: Shared data contracts, including `ProcessingOptions`.
+- `classification.py`: Rule-based document classification.
+- `storage.py`: Processed document JSON and summary persistence.
+- `upload_utils.py`: API upload validation, temporary file creation, and cleanup.
+- `services/`: Lazy ML service implementations with shared device resolution and thread-locks.
 
 ## License
 

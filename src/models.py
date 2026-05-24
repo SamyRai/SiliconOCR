@@ -30,6 +30,24 @@ class ProcessingStatus(StrEnum):
     FAILED = "failed"
 
 
+class ProcessingOptions(BaseModel):
+    """Options controlling a document processing run."""
+
+    enable_ocr: bool = True
+    enable_embeddings: bool = True
+    enable_classification: bool = False
+    write_text_layer: bool = False
+    enable_translation: bool = False
+    target_language: str = "en"
+
+
+class ClassificationResult(BaseModel):
+    """Result of classifying a document."""
+
+    document_type: DocumentType
+    confidence: float
+
+
 class ProcessedDocument(BaseModel):
     """Processed document metadata."""
 

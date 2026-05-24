@@ -1,18 +1,22 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api import app
+from src.api import app, get_processor
 
 
 @pytest.fixture
 def client():
-    # Because we use lifespan which depends on heavy models, we can mock the processor
-    # or just let it load if we want an integration test.
-    # Given the heavy nature of models, let's mock the lifespan for unit tests if possible,
-    # or just use TestClient which triggers lifespan. For this test, TestClient will trigger lifespan.
-    # On a CI server this might be slow, but it verifies actual instantiation.
-    with TestClient(app) as test_client:
+    class FakeProcessor:
+        def process_pdf(self, file_path, options=None):
+            self.file_path = file_path
+            self.options = options
+
+    app.dependency_overrides[get_processor] = lambda: FakeProcessor()
+    test_client = TestClient(app)
+    try:
         yield test_client
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_health_check(client):
@@ -31,3 +35,14 @@ def test_process_invalid_file_extension(client):
     response = client.post("/process", files=files)
     assert response.status_code == 400
     assert "Only PDF files are supported" in response.json()["detail"]
+
+
+def test_process_pdf_starts_background_task(client):
+    files = {"file": ("test.pdf", b"%PDF-1.4", "application/pdf")}
+    response = client.post("/process", files=files)
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": "Document processing started",
+        "document_id": "test.pdf",
+        "status": "processing",
+    }

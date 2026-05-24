@@ -118,3 +118,29 @@ class PDFProcessor:
         except Exception as e:
             logger.error(f"PDF to images conversion failed: {e}")
             raise
+
+    def write_text_layer(self, pdf_path: str | Path, page_texts: list[str]) -> None:
+        """Write OCR text to each PDF page as an invisible text layer."""
+        if pymupdf is None:
+            raise RuntimeError("PyMuPDF is required to write a PDF text layer")
+
+        pdf_path = Path(pdf_path)
+        doc = pymupdf.open(pdf_path)
+        try:
+            for page_index, page_text in enumerate(page_texts):
+                if page_index >= len(doc) or not page_text.strip():
+                    continue
+
+                page = doc[page_index]
+                rect = page.rect
+                page.insert_textbox(
+                    rect,
+                    page_text,
+                    fontsize=8,
+                    render_mode=3,
+                    overlay=True,
+                )
+
+            doc.saveIncr()
+        finally:
+            doc.close()
